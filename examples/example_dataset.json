@@ -1,0 +1,12 @@
+[
+  {
+    "instruction": "Summarize the following text.",
+    "input": "Artificial intelligence has transformed many aspects of our daily lives, from virtual assistants to autonomous vehicles.",
+    "output": "AI has significantly impacted everyday life through various applications."
+  },
+  {
+    "instruction": "Translate to Spanish.",
+    "input": "Hello, how are you?",
+    "output": "¡Hola, cómo estás?"
+  }
+]
