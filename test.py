@@ -3,7 +3,7 @@ import torch
 
 try:
     print("Loading model...")
-    model_path = 'D:\\Files\\Learning\\竞赛\\冯如杯\\InferPilot\\model\\Llama-2-7b-hf'
+    model_path = 'D:\\Files\\Learning\\竞赛\\冯如杯\\No_2\\Project\\mmbench\\model\\Llama-2-7b-hf'
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         device_map="auto",  # 自动分配到 GPU 或 CPU

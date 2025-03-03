@@ -75,6 +75,18 @@ python -u main.py --scenario Offline \
 		--model-name llama2-7b \
 		--total-sample-count 24576 \
 		--device cuda
+		
+# windows下运行
+$env:CHECKPOINT_PATH="D:/Files/Learning/竞赛/冯如杯/No_2/Project/mmbench/model/"
+$env:DATASET_PATH="D:/Files/Learning/竞赛/冯如杯/No_2/Project/mmbench/dataset/"
+                  
+python -u main.py --scenario Offline `
+                  --dataset D:/Files/Learning/竞赛/冯如杯/No_2/Project/mmbench/examples/example_dataset.json `
+                  --model-name llama2-7b `
+                  --total-sample-count 24576 `
+                  --device cuda
+                  
+--scenario Offline --dataset D:/Files/Learning/竞赛/冯如杯/No_2/Project/mmbench/examples/example_dataset.json --model-name llama2-7b --total-sample-count 24576 --device cuda
 
 ```
 
