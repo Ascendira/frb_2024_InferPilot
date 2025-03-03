@@ -303,7 +303,7 @@ class LlamaModel(LMMBaseModel):
 
         model_path = os.getenv('CHECKPOINT_PATH',default = None)
         if model_path is not None:
-            model_dir = model_path + '/Llama-2-7b-hf'
+            model_dir = model_path + 'Llama-2-7b-hf'
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_dir, device_map=device, torch_dtype=dtype)
         self.model = AutoModelForCausalLM.from_pretrained(model_dir, device_map=device, torch_dtype=dtype)
