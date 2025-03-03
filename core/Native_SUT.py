@@ -69,34 +69,40 @@ class SUT_native_base:
         print(self.dataset_name)
         print(self.model_name)
 
-        self.load_model()
+        try:
+            self.load_model()
 
-        self.data_object = Datasets(
-            model_name=self.model_name,
-            dataset=self.dataset_name,
-            batch_size=self.batch_size,
-            total_sample_count=total_sample_count,
-            device=self.device,
-            tokenizer=self.tokenizer,
-        )
+            self.data_object = Datasets(
+                model_name=self.model_name,
+                dataset=self.dataset_name,
+                batch_size=self.batch_size,
+                total_sample_count=total_sample_count,
+                device=self.device,
+                tokenizer=self.tokenizer,
+            )
 
-        print("actual size in dataset: ",self.data_object.total_sample_count)
+            print("actual size in dataset: ", self.data_object.total_sample_count)
 
-        self.qsl = lg.ConstructQSL(
-            self.data_object.total_sample_count,
-            self.data_object.perf_count,
-            self.data_object.LoadSamplesToRam,
-            self.data_object.UnloadSamplesFromRam,
-        )
+            self.qsl = lg.ConstructQSL(
+                self.data_object.total_sample_count,
+                self.data_object.perf_count,
+                self.data_object.LoadSamplesToRam,
+                self.data_object.UnloadSamplesFromRam,
+            )
 
+            self.num_workers = workers
+            self.worker_threads = [None] * self.num_workers
+            self.query_queue = queue.Queue()
 
-        self.num_workers = workers
-        self.worker_threads = [None] * self.num_workers
-        self.query_queue = queue.Queue()
+            self.use_cached_outputs = use_cached_outputs
+            self.sample_counter = 0
+            self.sample_counter_lock = threading.Lock()
 
-        self.use_cached_outputs = use_cached_outputs
-        self.sample_counter = 0
-        self.sample_counter_lock = threading.Lock()
+            print("Model loaded successfully!")
+
+        except Exception as e:
+            print(f"Failed to do something: {e}")
+
 
     def start(self):
         # Create worker threads
