@@ -75,7 +75,16 @@ python -u main.py --scenario Offline \
 		--model-name llama2-7b \
 		--total-sample-count 24576 \
 		--device cuda
-		
+	
+export CHECKPOINT_PATH="/home/frljc/frb_2024_InferPilot/model/"
+export DATASET_PATH="/home/frljc/frb_2024_InferPilot/dataset/"
+
+python -u main.py --scenario Offline \
+                --dataset /home/frljc/frb_2024_InferPilot/examples/example_dataset.json
+                --model-name llama2-7b \
+                --total-sample-count 24576 \
+                --device cuda
+	
 # windows下运行
 $env:CHECKPOINT_PATH="D:/Files/Learning/竞赛/冯如杯/No_2/Project/mmbench/model/"
 $env:DATASET_PATH="D:/Files/Learning/竞赛/冯如杯/No_2/Project/mmbench/dataset/"
