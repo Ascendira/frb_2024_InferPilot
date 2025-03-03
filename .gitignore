@@ -6,3 +6,4 @@ data/
 model/
 .idea/
 .git/
+/test.py

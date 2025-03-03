@@ -42,7 +42,6 @@ class SUT_native_base:
     ):
         # load dataset
         self.model_name = model_name
-
         self.device = device
 
         if not batch_size:
