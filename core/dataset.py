@@ -114,6 +114,7 @@ class Datasets:
 
         self.source_encoded_input_ids, self.source_encoded_attn_masks, self.input_lens = self.encode_samples()
 
+        print("source sample length: ",len(self.sources))
         max_samples=min(total_sample_count, len(self.sources))
 
         self.count = max_samples

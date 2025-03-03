@@ -13,6 +13,9 @@ import threading
 import tqdm
 import queue
 from pathlib import Path
+import requests
+import json
+from concurrent.futures import ThreadPoolExecutor
 
 from modeload import ModelLoader, SUPPORTED_MODELS, SUPPORTED_MODELS_VLM
 from dataset import Datasets
@@ -78,6 +81,8 @@ class SUT_native_base:
             tokenizer=self.tokenizer,
         )
 
+        print("actual size in dataset: ",self.data_object.total_sample_count)
+
         self.qsl = lg.ConstructQSL(
             self.data_object.total_sample_count,
             self.data_object.perf_count,
@@ -110,7 +115,16 @@ class SUT_native_base:
 
     def process_queries(self):
         """Processor of the queued queries. User may choose to add batching logic"""
-
+        ttl_batches = 0
+        ttl_ttft = 0
+        ttl_jct = 0
+        ttl_samples = 0
+        ttl_tpot = 0
+        ttl_nttft = 0
+        ttl_output_token = 0
+        ttl_throughput = 0
+        ttl_slo_satisfies = 0
+        ttl_goodput = 0
         while True:
             qitem = self.query_queue.get()
             if qitem is None:
@@ -132,6 +146,7 @@ class SUT_native_base:
                 tok = None
             else:
                 # Construct / collate batch
+                ttl_batches += 1
                 max_seq_len = 1024
 
                 tik1 = time.time()
@@ -172,13 +187,20 @@ class SUT_native_base:
                 assert input_ids_tensor.shape[0] <= self.batch_size
 
                 tik2 = time.time()
+                first_token_time = None
 
-                pred_output_tokens = self.model.generate(
+                pred_output_tokens = []
+                for i, output_token in enumerate(self.model.generate(
                     input_ids=input_ids_tensor,
                     attention_mask=input_masks_tensor,
                     pad_token_id=self.tokenizer.pad_token_id,
                     **gen_kwargs,
-                )
+                )):
+                    if i == 0:
+                        first_token_time = time.time()
+                    pred_output_tokens.append(output_token)
+
+                pred_output_tokens = torch.stack(pred_output_tokens)
 
                 tik3 = time.time()
 
@@ -188,6 +210,11 @@ class SUT_native_base:
                     query_id_list=query_ids,
                 )
 
+                ttft = first_token_time -tik1 if first_token_time else 0
+                total_output = sum(len(tokens) for tokens in processed_output)
+                tpot = (tik3 - first_token_time) / total_output if total_output else 0
+                nttft = ttft / sum(input_len)
+
             for i in range(len(qitem)):
                 n_tokens = processed_output[i].shape[0]
                 response_array = array.array("B", processed_output[i].tobytes())
@@ -196,6 +223,25 @@ class SUT_native_base:
                 lg.QuerySamplesComplete(response)
 
             tok = time.time()
+            throughput = len(qitem) / (tok - tik1)
+
+            #SLO
+            #rtt:响应时间目标（ttft）
+            #ptt:处理时间目标（jct）
+            #throughput:吞吐量
+            #对于batch内一个input长度为l的一个请求，令其slo目标为:rtt < rtt_max * l,....
+            slo_targets= {
+                "rtt_max":1, #响应时间目标
+                "ptt_max":10, #处理时间目标
+                "throughput_max":10, #吞吐量目标
+            }
+            slo_satisfies = 0
+            for q in qitem:
+                q_input_len = self.data_object.input_lens[q.index]
+                if ttft < q_input_len * slo_targets["rtt_max"] and tpot < q_input_len * slo_targets["ptt_max"] and throughput > slo_targets["throughput_max"]:
+                    slo_satisfies += 1
+            slo_attainments = slo_satisfies / len(qitem)
+            goodput = slo_satisfies / (tok - tik1)
 
             with self.sample_counter_lock:
                 self.sample_counter += len(qitem)
@@ -205,8 +251,40 @@ class SUT_native_base:
                     print(f"\tInference time: {tik3 - tik2}")
                     print(f"\tPostprocess time: {tok - tik3}")
                     print(f"\t==== Total time: {tok - tik1}")
+                    ttl_jct += (tok - tik1)
+                    print(f"\t Samples in this batch: {len(qitem)}")
+                    ttl_samples += len(qitem)
+                    print(f"\tTTFT: {ttft}")
+                    ttl_ttft += ttft
+                    print(f"\tTPOT: {tpot}")
+                    ttl_tpot += tpot
+                    print(f"\tNTTFT: {nttft}")
+                    ttl_nttft += nttft
+                    print(f"\ttotal Tokens: {total_output}")
+                    ttl_output_token += total_output
+                    print(f"\tthroughput: {throughput} samples/sec")
+                    ttl_throughput += throughput
+                    print(f"\tSLO Attainment: {slo_attainments}, {slo_satisfies}/{len(qitem)}")
+                    ttl_slo_satisfies += slo_satisfies
+                    print(f"\tGoodput: {goodput} samples/sec")
+                    ttl_goodput += goodput
                 else:
                     print(f"\tLoaded from cache: {_p}")
+
+        print(f"\t==========total statistics==========")
+        print(f"\ttotal batches count ",ttl_batches)
+        print(f"\ttotal samples count ",ttl_samples)
+        print(f"\ttotal output tokens count", ttl_output_token)
+        print(f"\taverage ttft ",ttl_ttft/ttl_batches)
+        print(f"\taverage tpot ",ttl_tpot/ttl_batches)
+        print(f"\taverage nttft ",ttl_nttft/ttl_batches)
+        print(f"\taverage jct ",ttl_jct/ttl_batches)
+        print(f"\taverage throughput ",ttl_throughput/ttl_batches)
+        print(f"\ttotal throughput ",ttl_samples/ttl_jct)
+        print(f"\ttotal slo rate ",ttl_slo_satisfies/ttl_samples)
+        print(f"\ttotal goodput ",ttl_slo_satisfies/ttl_jct)
+        print(f"\taverage goodput ",ttl_goodput/ttl_batches)
+        
 
     def load_model(self):
 
@@ -255,16 +333,37 @@ class SUT_native_base:
     def predict(self, **kwargs):
         raise NotImplementedError
 
+    from enum import Enum
+    class batch_type(Enum):
+        NO_BATCHING= 0
+        STATIC_BATCHING = 1
+        CONTINUOUS_BATCHING = 2
+        PREEMPTIVE_BATCHING = 3
+        LOADRANGE = 4
+
     def issue_queries(self, query_samples):
         """Receives samples from loadgen and adds them to queue. Users may choose to batch here"""
-
+        batch_implement = self.batch_type.NO_BATCHING
         list_prompts_tokens = []
         list_prompts_attn_masks = []
 
         print(f"IssueQuery started with {len(query_samples)} samples")
-        while len(query_samples) > 0:
-            self.query_queue.put(query_samples[: self.batch_size])
-            query_samples = query_samples[self.batch_size :]
+        if batch_implement == self.batch_type.NO_BATCHING:
+            print(f"Implementing no batching")
+            while len(query_samples) > 0:
+                self.query_queue.put(query_samples[: self.batch_size])
+                query_samples = query_samples[self.batch_size :]
+        elif batch_implement == self.batch_type.STATIC_BATCHING:
+            print(f"Implementing static batching, batch size is ",self.batch_size)
+            while len(query_samples) > 0:
+                self.query_queue.put(query_samples[: self.batch_size])
+                query_samples = query_samples[self.batch_size :]
+        elif batch_implement == self.batch_type.CONTINUOUS_BATCHING:
+            print(f"Implementing continuous batching, max processing size is ",self.batch_size)
+        elif batch_implement == self.batch_type.PREEMPTIVE_BATCHING:
+            print(f"Implementing preemptive batching, batch size is ",self.batch_size)
+        elif batch_implement == self.batch_type.LOADRANGE:
+            print(f"Implementing mlperf system, batch size is ",self.batch_size)
         print(f"IssueQuery done")
 
     def flush_queries(self):
