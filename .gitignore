@@ -4,4 +4,4 @@ __pycache__/
 generated/
 data/
 model/
-
+.idea/
